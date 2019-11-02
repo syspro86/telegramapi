@@ -34,7 +34,11 @@ public class Telegram {
 				Update[] result = command.getResult();
 
 				Arrays.stream(result).forEach((obj) -> {
-					callback.onUpdate(obj);
+					try {
+						callback.onUpdate(obj);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
 				});
 			}
 		}).start();
