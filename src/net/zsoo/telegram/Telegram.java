@@ -6,19 +6,41 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Base64;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.function.Supplier;
 
 import com.google.gson.Gson;
 
 public class Telegram {
 	private String token;
+	private boolean polling;
 
 	public Telegram(String token) {
 		this.token = token;
 	}
 
-	private HashMap<?, ?> command(String command, HashMap<String, String> param) {
+	public void startPoll(TelegramUpdateListener callback, Supplier<Long> nextOffset, int timeout) {
+		polling = true;
+		new Thread(() -> {
+			while (polling) {
+				HashMap opt = new HashMap<>();
+				Long offset = nextOffset.get();
+				if (offset != null) {
+					opt.put("offset", offset);
+				}
+				opt.put("timeout", timeout);
+				GetUpdatesResult command = command("/getUpdates", opt, GetUpdatesResult.class);
+				Update[] result = command.getResult();
+
+				Arrays.stream(result).forEach((obj) -> {
+					callback.onUpdate(obj);
+				});
+			}
+		}).start();
+	}
+
+	private <T> T command(String command, HashMap<String, String> param, Class<T> clazz) {
 		try {
 			Gson gson = new Gson();
 			String json = gson.toJson(param);
@@ -43,12 +65,16 @@ public class Telegram {
 
 			InputStream is = conn.getInputStream();
 			gson = new Gson();
-			HashMap<?, ?> obj = gson.fromJson(new InputStreamReader(is), HashMap.class);
+			T obj = gson.fromJson(new InputStreamReader(is), clazz);
 			return obj;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		return null;
+	}
+
+	private HashMap<?, ?> command(String command, HashMap<String, String> param) {
+		return command(command, param, HashMap.class);
 	}
 
 	public void sendMessage(String chatId, String message) {
